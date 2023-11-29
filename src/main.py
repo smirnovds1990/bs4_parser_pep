@@ -9,7 +9,10 @@ from tqdm import tqdm
 from configs import configure_argument_parser, configure_logging
 from constants import BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
 from outputs import control_output
-from utils import get_response, find_tag
+from utils import (
+    compare_table_and_card_statuses, count_statuses, find_tag,
+    get_response, get_statuses_from_pep_card, put_info_from_tables_to_tuples
+)
 
 
 def whats_new(session):
@@ -23,7 +26,7 @@ def whats_new(session):
     sections_by_python = div_with_ul.find_all(
         'li', attrs={'class': 'toctree-l1'}
     )
-    results = [('Ссылка на статью', 'Заголовок', 'Редактор, автор')]
+    result = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     for section in tqdm(sections_by_python):
         version_a_tag = find_tag(section, 'a')
         href = version_a_tag['href']
@@ -35,8 +38,8 @@ def whats_new(session):
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
         dl_text = dl.text.replace('\n', ' ')
-        results.append((version_link, h1.text, dl_text))
-    return results
+        result.append((version_link, h1.text, dl_text))
+    return result
 
 
 def latest_versions(session):
@@ -94,42 +97,17 @@ def pep(session):
         return
     soup = BeautifulSoup(response.text, features='lxml')
     abbr_tags = soup.find_all('abbr')
-    table_statuses = []
-    links = []
-    for tag in abbr_tags:
-        table_statuses.append(tag.text[1:])
     a_tags = soup.find_all('a', attrs={'class': 'pep reference internal'})
-    for i in range(0, len(a_tags), 2):
-        links.append(a_tags[i]['href'])
-    statuses = []
-    for link in links[1:100]:
-        pep_url = urljoin(MAIN_PEP_URL, link)
-        response = get_response(session, pep_url)
-        if response is None:
-            continue
-        soup = BeautifulSoup(response.text, features='lxml')
-        pep_info = find_tag(
-            soup, 'dl', attrs={'class': 'rfc2822 field-list simple'}
-        )
-        lines = pep_info.text.split('\n')
-        status_line_index = next(
-            i for i, line in enumerate(lines) if line.strip().startswith('Status:')
-        )
-        status_value = lines[status_line_index + 1].strip()
-        statuses.append(status_value)
-    result = {}
-    for status in statuses:
-        if status in result:
-            result[status] += 1
-            continue
-        else:
-            result[status] = 1
-            continue
-    res = [('Статус', 'Количество')]
-    for key, value in result.items():
-        res.append((key, value))
-    return res
-    # print(res)
+    tuples = put_info_from_tables_to_tuples(abbr_tags, a_tags)
+    statuses = get_statuses_from_pep_card(session, tuples)
+    compare_table_and_card_statuses(tuples, statuses)
+    counted_statuses = count_statuses(statuses)
+    result = [('Статус', 'Количество')]
+    for key, value in counted_statuses.items():
+        result.append((key, value))
+    total = sum(map(int, counted_statuses.values()))
+    result.append(('Total', total))
+    return result
 
 
 MODE_TO_FUNCTION = {
