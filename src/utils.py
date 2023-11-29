@@ -48,7 +48,7 @@ def put_info_from_tables_to_tuples(abbr_tags, a_tags):
 def get_statuses_from_pep_card(session, tuples):
     """Парсит статусы из карточки со страницы каждого PEP."""
     statuses = []
-    for tup in tuples[0:500]:
+    for tup in tuples:
         link = tup[0]
         pep_url = urljoin(MAIN_PEP_URL, link)
         response = get_response(session, pep_url)
@@ -70,7 +70,7 @@ def get_statuses_from_pep_card(session, tuples):
 
 def compare_table_and_card_statuses(tuples, statuses):
     """Сравнивает статусы в общей таблице и в карточке конкретного PEP."""
-    for i in range(0, 500):
+    for i in range(0, len(tuples)):
         if statuses[i] in EXPECTED_STATUS[tuples[i][1]]:
             continue
         else:
