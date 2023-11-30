@@ -8,16 +8,24 @@ from constants import EXPECTED_STATUS, MAIN_PEP_URL
 from exceptions import ParserFindTagException
 
 
-def get_response(session, url):
+def get_response(session, url, encoding='utf-8'):
     try:
         response = session.get(url)
-        response.encoding = 'utf-8'
+        response.encoding = encoding
         return response
     except RequestException:
         logging.exception(
             f'Возникла ошибка при загрузке страницы {url}',
             stack_info=True
         )
+
+
+def get_soup(session, url):
+    response = get_response(session, url)
+    if response is None:
+        return
+    soup = BeautifulSoup(response.text, features='lxml')
+    return soup
 
 
 def find_tag(soup, tag, attrs=None):
@@ -80,16 +88,3 @@ def compare_table_and_card_statuses(tuples, statuses):
                 f'Статус в карточке: {statuses[i]}\n'
                 f'Ожидаемые статусы: {EXPECTED_STATUS[tuples[i][1]]}'
             )
-
-
-def count_statuses(statuses):
-    """Подсчитывает количество каждого статуса."""
-    statuses_counter = {}
-    for status in statuses:
-        if status in statuses_counter:
-            statuses_counter[status] += 1
-            continue
-        else:
-            statuses_counter[status] = 1
-            continue
-    return statuses_counter

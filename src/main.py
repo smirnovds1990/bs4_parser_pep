@@ -1,26 +1,25 @@
 import logging
 import re
+from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
 from bs4 import BeautifulSoup
+from requests.exceptions import RequestException
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
 from constants import BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
 from outputs import control_output
 from utils import (
-    compare_table_and_card_statuses, count_statuses, find_tag,
-    get_response, get_statuses_from_pep_card, put_info_from_tables_to_tuples
+    compare_table_and_card_statuses, find_tag, get_response, get_soup,
+    get_statuses_from_pep_card, put_info_from_tables_to_tuples
 )
 
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
-    response = get_response(session, whats_new_url)
-    if response is None:
-        return
-    soup = BeautifulSoup(response.text, features='lxml')
+    soup = get_soup(session, whats_new_url)
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
     sections_by_python = div_with_ul.find_all(
@@ -43,10 +42,7 @@ def whats_new(session):
 
 
 def latest_versions(session):
-    response = get_response(session, MAIN_DOC_URL)
-    if response is None:
-        return
-    soup = BeautifulSoup(response.text, features='lxml')
+    soup = get_soup(session, MAIN_DOC_URL)
     sidebar = find_tag(soup, 'div', attrs={'class': 'sphinxsidebarwrapper'})
     ul_tags = sidebar.find_all('ul')
     for ul in ul_tags:
@@ -54,7 +50,7 @@ def latest_versions(session):
             a_tags = ul.find_all('a')
             break
     else:
-        raise Exception('Ничего не нашлось')
+        raise ValueError('Ничего не нашлось')
     results = [('Ссылка на документацию', 'Версия', 'Статус')]
     pattern = r'Python (?P<version>\d\.\d+) \((?P<status>.*)\)'
     for a_tag in a_tags:
@@ -70,10 +66,7 @@ def latest_versions(session):
 
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
-    response = get_response(session, downloads_url)
-    if response is None:
-        return
-    soup = BeautifulSoup(response.text, features='lxml')
+    soup = get_soup(session, downloads_url)
     main_tag = find_tag(soup, 'div', {'role': 'main'})
     table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
     pdf_a4_tag = find_tag(
@@ -92,16 +85,15 @@ def download(session):
 
 
 def pep(session):
-    response = get_response(session, MAIN_PEP_URL)
-    if response is None:
-        return
-    soup = BeautifulSoup(response.text, features='lxml')
+    soup = get_soup(session, MAIN_PEP_URL)
     abbr_tags = soup.find_all('abbr')
     a_tags = soup.find_all('a', attrs={'class': 'pep reference internal'})
     tuples = put_info_from_tables_to_tuples(abbr_tags, a_tags)
     statuses = get_statuses_from_pep_card(session, tuples)
     compare_table_and_card_statuses(tuples, statuses)
-    counted_statuses = count_statuses(statuses)
+    counted_statuses = defaultdict(int)
+    for status in statuses:
+        counted_statuses[status] += 1
     result = [('Статус', 'Количество')]
     for key, value in counted_statuses.items():
         result.append((key, value))
@@ -128,7 +120,17 @@ def main():
     if args.clear_cache:
         session.cache.clear()
     parser_mode = args.mode
-    results = MODE_TO_FUNCTION[parser_mode](session)
+    try:
+        results = MODE_TO_FUNCTION[parser_mode](session)
+    except KeyError as error:
+        error_msg = (
+            f'Ошибка: {error}. Неизвестный режим работы парсера: {parser_mode}'
+        )
+        logging.error(error_msg, stack_info=True)
+    except RequestException as error:
+        error_msg = f'Ошибка сессии при запросе: {error}'
+        logging.error(error_msg, stack_info=True)
+        raise RequestException(error_msg)
     if results is not None:
         control_output(results, args)
     logging.info('Парсер завершил работу.')

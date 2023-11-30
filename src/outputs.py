@@ -30,7 +30,7 @@ def pretty_output(results):
     print(table)
 
 
-def file_output(results, cli_args):
+def file_output(results, cli_args, encoding='utf-8'):
     results_dir = BASE_DIR / 'results'
     results_dir.mkdir(exist_ok=True)
     parser_mode = cli_args.mode
@@ -38,7 +38,7 @@ def file_output(results, cli_args):
     now_formatted = now.strftime(DATETIME_FORMAT)
     file_name = f'{parser_mode}_{now_formatted}.csv'
     file_path = results_dir / file_name
-    with open(file_path, 'w', encoding='utf-8') as f:
+    with open(file_path, 'w', encoding=encoding) as f:
         writer = csv.writer(f, dialect='unix')
         writer.writerows(results)
     logging.info(f'Файл с результатами был сохранён: {file_path}')
