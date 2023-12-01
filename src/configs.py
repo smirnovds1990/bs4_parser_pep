@@ -3,7 +3,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 from constants import (
-    DT_FORMAT, FILE_OUTPUT, LOG_DIR, LOG_FORMAT, PRETTY_OUTPUT
+    DATETIME_FORMAT, FILE_OUTPUT, LOG_DIR, LOG_FORMAT, PRETTY_OUTPUT
 )
 
 
@@ -36,7 +36,7 @@ def configure_logging():
         log_file, maxBytes=10 ** 6, backupCount=5
     )
     logging.basicConfig(
-        datefmt=DT_FORMAT,
+        datefmt=DATETIME_FORMAT,
         format=LOG_FORMAT,
         level=logging.INFO,
         handlers=(rotating_handler, logging.StreamHandler())

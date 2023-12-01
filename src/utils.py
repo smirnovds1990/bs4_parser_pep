@@ -59,10 +59,9 @@ def get_statuses_from_pep_card(session, tuples):
     for tup in tuples:
         link = tup[0]
         pep_url = urljoin(MAIN_PEP_URL, link)
-        response = get_response(session, pep_url)
-        if response is None:
-            continue
-        soup = BeautifulSoup(response.text, features='lxml')
+        soup = get_soup(session, pep_url)
+        if soup is None:
+            return
         pep_info = find_tag(
             soup, 'dl', attrs={'class': 'rfc2822 field-list simple'}
         )

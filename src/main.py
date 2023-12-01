@@ -4,15 +4,13 @@ from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
-from bs4 import BeautifulSoup
-from requests.exceptions import RequestException
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
-from constants import BASE_DIR, MAIN_DOC_URL, MAIN_PEP_URL
+from constants import BASE_DIR, DOWNLOADS_DIR, MAIN_DOC_URL, MAIN_PEP_URL
 from outputs import control_output
 from utils import (
-    compare_table_and_card_statuses, find_tag, get_response, get_soup,
+    compare_table_and_card_statuses, find_tag, get_soup,
     get_statuses_from_pep_card, put_info_from_tables_to_tuples
 )
 
@@ -20,6 +18,8 @@ from utils import (
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
     soup = get_soup(session, whats_new_url)
+    if soup is None:
+        return
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
     sections_by_python = div_with_ul.find_all(
@@ -30,10 +30,9 @@ def whats_new(session):
         version_a_tag = find_tag(section, 'a')
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
-        response = get_response(session, version_link)
-        if response is None:
-            continue
-        soup = BeautifulSoup(response.text, features='lxml')
+        soup = get_soup(session, version_link)
+        if soup is None:
+            return
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
         dl_text = dl.text.replace('\n', ' ')
@@ -43,6 +42,8 @@ def whats_new(session):
 
 def latest_versions(session):
     soup = get_soup(session, MAIN_DOC_URL)
+    if soup is None:
+        return
     sidebar = find_tag(soup, 'div', attrs={'class': 'sphinxsidebarwrapper'})
     ul_tags = sidebar.find_all('ul')
     for ul in ul_tags:
@@ -67,6 +68,8 @@ def latest_versions(session):
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
     soup = get_soup(session, downloads_url)
+    if soup is None:
+        return
     main_tag = find_tag(soup, 'div', {'role': 'main'})
     table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
     pdf_a4_tag = find_tag(
@@ -75,7 +78,7 @@ def download(session):
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
-    downloads_dir = BASE_DIR / 'downloads'
+    downloads_dir = BASE_DIR / DOWNLOADS_DIR
     downloads_dir.mkdir(exist_ok=True)
     archive_path = downloads_dir / filename
     response = session.get(archive_url)
@@ -86,6 +89,8 @@ def download(session):
 
 def pep(session):
     soup = get_soup(session, MAIN_PEP_URL)
+    if soup is None:
+        return
     abbr_tags = soup.find_all('abbr')
     a_tags = soup.find_all('a', attrs={'class': 'pep reference internal'})
     tuples = put_info_from_tables_to_tuples(abbr_tags, a_tags)
@@ -127,10 +132,6 @@ def main():
             f'Ошибка: {error}. Неизвестный режим работы парсера: {parser_mode}'
         )
         logging.error(error_msg, stack_info=True)
-    except RequestException as error:
-        error_msg = f'Ошибка сессии при запросе: {error}'
-        logging.error(error_msg, stack_info=True)
-        raise RequestException(error_msg)
     if results is not None:
         control_output(results, args)
     logging.info('Парсер завершил работу.')
